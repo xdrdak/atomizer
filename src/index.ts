@@ -4,20 +4,19 @@ import get from 'lodash/get';
 
 const lastArrayAccessor = new RegExp(/\[\d*\]$/);
 
-function getUniqueKeys(obj: any) {
-  const keys = Object.keys(obj).map(s => s.replace(lastArrayAccessor, ''));
-  return uniq(keys);
-}
-
-const generateCssClasses = (values, unit = '', indexOffset = 0) => (key, prop) => {
+const atomicCssGenerator = ({ values, unit = '', indexOffset = 0 }) => (
+  key,
+  prop
+) => {
   if (Array.isArray(values)) {
     return values.reduce((acc, value, index) => {
-      return `${acc}\n.${key}${index + indexOffset} { ${prop}: ${value}${unit}; }`;
-    }, '')
+      return `${acc}\n.${key}${index +
+        indexOffset} { ${prop}: ${value}${unit}; }`;
+    }, '');
   }
 
   return `.${key} { ${prop}: ${values}${unit}; }\n`;
-}
+};
 
 function stringifyArray(...rest) {
   return [rest].join('\n');
@@ -27,11 +26,21 @@ interface MapperFunction {
   values: any;
   unit?: string;
   path?: string;
-};
+}
+
+function getLastPath(path) {
+  return (
+    path &&
+    path
+      .split('.')
+      .slice(1)
+      .join('-')
+  );
+}
 
 const transformMap = {
   space: ({ values, unit = 'px' }: MapperFunction): string[] => {
-    const generator = generateCssClasses(values, unit);
+    const generator = atomicCssGenerator({ values, unit });
     return [
       ...generator('pa', 'padding'),
       ...generator('pt', 'padding-top'),
@@ -46,19 +55,26 @@ const transformMap = {
     ];
   },
   fontSizes: ({ values, unit = 'px' }: MapperFunction): string[] => {
-    const generator = generateCssClasses(Array.isArray(values) ? values : [values], unit, 1);
+    const generator = atomicCssGenerator({ values, unit, indexOffset: 1 });
     return [...generator('f', 'font-size')];
   },
+  fontWeights: ({ values, path }: MapperFunction): string[] => {
+    const generator = atomicCssGenerator({ values });
+    const key = getLastPath(path);
+
+    return [...generator(`fw-${key}`, 'font-weight')];
+  },
   colors: ({ values, path }: MapperFunction): string[] => {
-    const key = path && path.split('.').slice(1).join('-');
-    const generator = generateCssClasses(values);
+    const key = getLastPath(path);
+    const generator = atomicCssGenerator({ values });
+    const nextKey = Array.isArray(values) ? `${key}-` : key;
 
     return [
-      ...generator(Array.isArray(values) ? `${key}-` : key, 'color'),
-      ...generator(`bg-${key}`, 'background-color'),
-      ...generator(`b-${key}`, 'border-color'),
+      ...generator(nextKey, 'color'),
+      ...generator(`bg-${nextKey}`, 'background-color'),
+      ...generator(`b-${nextKey}`, 'border-color'),
     ];
-  }
+  },
 };
 
 // https://system-ui.com/theme/
@@ -80,11 +96,14 @@ export class Atomizer {
   }
 
   get uniquePaths() {
-    return getUniqueKeys(this.flatTheme);
+    const keys = Object.keys(this.flatTheme).map(s =>
+      s.replace(lastArrayAccessor, '')
+    );
+    return uniq(keys);
   }
 
   convertToCss() {
-    const css = this.uniquePaths.reduce((acc, path) => {
+    const output = this.uniquePaths.reduce((acc, path) => {
       const wantedMapper = path.split('.')[0];
       const mapperFunction = transformMap[wantedMapper];
 
@@ -95,6 +114,6 @@ export class Atomizer {
       return acc;
     }, '');
 
-    console.log(css);
+    return output;
   }
 }
