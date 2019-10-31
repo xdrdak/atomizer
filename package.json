@@ -37,6 +37,6 @@
   "dependencies": {
     "@types/lodash": "^4.14.132",
     "flattenjs": "^1.0.4",
-    "lodash": "^4.17.11"
+    "lodash": "^4.17.13"
   }
 }
